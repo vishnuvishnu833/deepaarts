@@ -244,7 +244,7 @@
       border: 1px solid #f0e6d2;
     }
 
-    /* Enhanced Lightbox with Zoom */
+    /* Enhanced Lightbox with Zoom Controls */
     .lightbox {
       position: fixed;
       top: 0;
@@ -260,7 +260,6 @@
       pointer-events: none;
       transition: opacity 0.3s;
       touch-action: none;
-      overflow: hidden;
     }
 
     .lightbox.show {
@@ -273,7 +272,6 @@
       width: 100%;
       height: 100%;
       overflow: hidden;
-      touch-action: none;
     }
 
     .lightbox-img-container {
@@ -286,20 +284,18 @@
       justify-content: center;
       align-items: center;
       touch-action: none;
-      transform-origin: center center;
-      will-change: transform;
     }
 
     .lightbox-img {
       max-width: 100%;
       max-height: 100%;
       display: block;
+      transition: transform 0.3s cubic-bezier(0.2, 0, 0.2, 1);
       transform-origin: center center;
-      will-change: transform;
       touch-action: none;
       user-select: none;
       -webkit-user-drag: none;
-      transition: transform 0.15s cubic-bezier(0.2, 0, 0.2, 1);
+      will-change: transform;
     }
 
     .lightbox-close {
@@ -360,6 +356,7 @@
       font-family: 'Playfair Display', serif;
     }
 
+    /* Zoom Controls */
     .lightbox-zoom-controls {
       position: absolute;
       bottom: 20px;
@@ -370,7 +367,7 @@
       z-index: 1001;
     }
 
-    .lightbox-zoom-controls button {
+    .lightbox-zoom-btn {
       background: rgba(255,255,255,0.2);
       color: white;
       border: none;
@@ -382,14 +379,20 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      transition: background 0.2s;
       outline: none;
     }
 
-    .lightbox-zoom-controls button:active {
+    .lightbox-zoom-btn:hover {
       background: rgba(255,255,255,0.3);
     }
 
-    .lightbox-zoom-reset {
+    .lightbox-zoom-btn:active {
+      background: rgba(255,255,255,0.4);
+    }
+
+    /* Reset Zoom Button */
+    .lightbox-reset-zoom {
       position: absolute;
       bottom: 20px;
       left: 20px;
@@ -402,10 +405,16 @@
       cursor: pointer;
       z-index: 1001;
       display: none;
+      transition: background 0.2s;
+      outline: none;
     }
 
-    .lightbox-zoom-reset.show {
+    .lightbox-reset-zoom.show {
       display: block;
+    }
+
+    .lightbox-reset-zoom:hover {
+      background: rgba(255,255,255,0.3);
     }
 
     /* Table Styles - Mobile Friendly */
@@ -875,7 +884,7 @@
     </footer>
   </div>
 
-  <!-- Enhanced Lightbox with Zoom -->
+  <!-- Enhanced Lightbox with Zoom Controls -->
   <div class="lightbox" id="lightbox">
     <div class="lightbox-content">
       <button class="lightbox-close" onclick="closeLightbox()" aria-label="Close lightbox">&times;</button>
@@ -888,10 +897,10 @@
         <button onclick="navigateLightbox(1)" aria-label="Next image"><i class="fas fa-chevron-right"></i></button>
       </div>
       <div class="lightbox-zoom-controls">
-        <button onclick="zoomIn()" aria-label="Zoom in"><i class="fas fa-search-plus"></i></button>
-        <button onclick="zoomOut()" aria-label="Zoom out"><i class="fas fa-search-minus"></i></button>
+        <button class="lightbox-zoom-btn" onclick="zoomImageIn()" aria-label="Zoom in"><i class="fas fa-search-plus"></i></button>
+        <button class="lightbox-zoom-btn" onclick="zoomImageOut()" aria-label="Zoom out"><i class="fas fa-search-minus"></i></button>
       </div>
-      <button class="lightbox-zoom-reset" onclick="resetZoom()" id="zoom-reset-btn">Reset Zoom</button>
+      <button class="lightbox-reset-zoom" onclick="resetZoom()" aria-label="Reset zoom">Reset Zoom</button>
     </div>
   </div>
 
@@ -906,52 +915,42 @@
       el.classList.toggle('open');
     }
 
-    // Enhanced Lightbox with Zoom functionality
+    // Enhanced Lightbox functionality with zoom controls
     let currentImages = [];
     let currentIndex = 0;
     let currentScale = 1;
-    let currentTranslateX = 0;
-    let currentTranslateY = 0;
     let isDragging = false;
-    let startX, startY, startTranslateX, startTranslateY;
-    let touchStartDistance = 0;
-    let initialPinchDistance = 0;
-    let initialScale = 1;
-    let touchStartX = 0;
-    let touchStartY = 0;
-    let touchStartTime = 0;
-    let velocityX = 0;
-    let velocityY = 0;
-    let lastTouchTime = 0;
-    let lastTouchX = 0;
-    let lastTouchY = 0;
-    let animationFrameId = null;
+    let startX, startY, translateX = 0, translateY = 0;
+    let lastTouchDistance = 0;
 
     function openLightbox(images, index) {
       currentImages = images;
       currentIndex = index;
       currentScale = 1;
-      currentTranslateX = 0;
-      currentTranslateY = 0;
+      translateX = 0;
+      translateY = 0;
       updateLightboxImage();
       document.getElementById('lightbox').classList.add('show');
       document.body.style.overflow = 'hidden';
       updateCounter();
-      document.getElementById('zoom-reset-btn').classList.remove('show');
+      updateResetButton();
     }
 
     function closeLightbox() {
       document.getElementById('lightbox').classList.remove('show');
       document.body.style.overflow = '';
-      cancelAnimationFrame(animationFrameId);
     }
 
     function updateLightboxImage() {
       const lightboxImg = document.getElementById('lightbox-img');
       lightboxImg.src = currentImages[currentIndex];
       lightboxImg.alt = 'Gallery image ' + (currentIndex + 1);
+      lightboxImg.style.transform = 'scale(1) translate(0, 0)';
+      currentScale = 1;
+      translateX = 0;
+      translateY = 0;
       updateCounter();
-      resetTransform();
+      updateResetButton();
     }
 
     function updateCounter() {
@@ -975,195 +974,47 @@
       openLightbox(images, index);
     }
 
-    // Zoom functions
-    function zoomIn() {
-      currentScale = Math.min(currentScale * 1.5, 5);
-      applyTransform();
-      showResetButton();
+    // Zoom in function
+    function zoomImageIn() {
+      const lightboxImg = document.getElementById('lightbox-img');
+      currentScale = Math.min(currentScale * 1.2, 4);
+      lightboxImg.style.transform = `scale(${currentScale}) translate(${translateX}px, ${translateY}px)`;
+      updateResetButton();
     }
 
-    function zoomOut() {
-      currentScale = Math.max(currentScale / 1.5, 1);
+    // Zoom out function
+    function zoomImageOut() {
+      const lightboxImg = document.getElementById('lightbox-img');
+      currentScale = Math.max(currentScale / 1.2, 1);
+      
+      // If we're back to 1:1 scale, reset translation too
       if (currentScale === 1) {
-        resetTransform();
-      } else {
-        applyTransform();
+        translateX = 0;
+        translateY = 0;
       }
-      showResetButton();
+      
+      lightboxImg.style.transform = `scale(${currentScale}) translate(${translateX}px, ${translateY}px)`;
+      updateResetButton();
     }
 
+    // Reset zoom and position
     function resetZoom() {
-      resetTransform();
-    }
-
-    function applyTransform() {
-      const img = document.getElementById('lightbox-img');
-      img.style.transform = `translate(${currentTranslateX}px, ${currentTranslateY}px) scale(${currentScale})`;
-    }
-
-    function resetTransform() {
+      const lightboxImg = document.getElementById('lightbox-img');
       currentScale = 1;
-      currentTranslateX = 0;
-      currentTranslateY = 0;
-      const img = document.getElementById('lightbox-img');
-      img.style.transform = 'translate(0, 0) scale(1)';
-      document.getElementById('zoom-reset-btn').classList.remove('show');
+      translateX = 0;
+      translateY = 0;
+      lightboxImg.style.transform = 'scale(1) translate(0, 0)';
+      updateResetButton();
     }
 
-    function showResetButton() {
-      if (currentScale !== 1) {
-        document.getElementById('zoom-reset-btn').classList.add('show');
+    // Show/hide reset button based on zoom state
+    function updateResetButton() {
+      const resetBtn = document.querySelector('.lightbox-reset-zoom');
+      if (currentScale > 1 || translateX !== 0 || translateY !== 0) {
+        resetBtn.classList.add('show');
       } else {
-        document.getElementById('zoom-reset-btn').classList.remove('show');
+        resetBtn.classList.remove('show');
       }
-    }
-
-    // Touch and drag handling
-    function handleTouchStart(e) {
-      if (e.touches.length === 1) {
-        // Single touch - prepare for drag
-        const touch = e.touches[0];
-        startX = touch.clientX;
-        startY = touch.clientY;
-        startTranslateX = currentTranslateX;
-        startTranslateY = currentTranslateY;
-        isDragging = true;
-        
-        touchStartX = touch.clientX;
-        touchStartY = touch.clientY;
-        touchStartTime = Date.now();
-        lastTouchX = touch.clientX;
-        lastTouchY = touch.clientY;
-        lastTouchTime = touchStartTime;
-        
-        cancelAnimationFrame(animationFrameId);
-        velocityX = 0;
-        velocityY = 0;
-      } else if (e.touches.length === 2) {
-        // Two touches - prepare for pinch zoom
-        const touch1 = e.touches[0];
-        const touch2 = e.touches[1];
-        touchStartDistance = Math.hypot(
-          touch2.clientX - touch1.clientX,
-          touch2.clientY - touch1.clientY
-        );
-        initialScale = currentScale;
-        initialPinchDistance = touchStartDistance;
-      }
-    }
-
-    function handleTouchMove(e) {
-      if (e.touches.length === 1 && isDragging) {
-        // Single touch drag
-        e.preventDefault();
-        const touch = e.touches[0];
-        const deltaX = touch.clientX - startX;
-        const deltaY = touch.clientY - startY;
-        
-        currentTranslateX = startTranslateX + deltaX;
-        currentTranslateY = startTranslateY + deltaY;
-        
-        // Calculate velocity for momentum scrolling
-        const now = Date.now();
-        const deltaTime = now - lastTouchTime;
-        if (deltaTime > 0) {
-          velocityX = (touch.clientX - lastTouchX) / deltaTime;
-          velocityY = (touch.clientY - lastTouchY) / deltaTime;
-        }
-        lastTouchX = touch.clientX;
-        lastTouchY = touch.clientY;
-        lastTouchTime = now;
-        
-        applyTransform();
-      } else if (e.touches.length === 2) {
-        // Two touches - pinch zoom
-        e.preventDefault();
-        const touch1 = e.touches[0];
-        const touch2 = e.touches[1];
-        const currentDistance = Math.hypot(
-          touch2.clientX - touch1.clientX,
-          touch2.clientY - touch1.clientY
-        );
-        
-        if (touchStartDistance > 0) {
-          const scale = (currentDistance / initialPinchDistance) * initialScale;
-          currentScale = Math.min(Math.max(scale, 1), 5);
-          
-          // Calculate center point between two fingers
-          const centerX = (touch1.clientX + touch2.clientX) / 2;
-          const centerY = (touch1.clientY + touch2.clientY) / 2;
-          
-          // Adjust translation to zoom toward the center point
-          const img = document.getElementById('lightbox-img');
-          const imgRect = img.getBoundingClientRect();
-          const imgCenterX = imgRect.left + imgRect.width / 2;
-          const imgCenterY = imgRect.top + imgRect.height / 2;
-          
-          currentTranslateX += (centerX - imgCenterX) * (currentScale / initialScale - 1);
-          currentTranslateY += (centerY - imgCenterY) * (currentScale / initialScale - 1);
-          
-          applyTransform();
-          showResetButton();
-        }
-      }
-    }
-
-    function handleTouchEnd(e) {
-      if (e.touches.length === 0) {
-        isDragging = false;
-        touchStartDistance = 0;
-        
-        // Apply momentum if velocity is high enough
-        if (Math.abs(velocityX) > 0.2 || Math.abs(velocityY) > 0.2) {
-          applyMomentum();
-        }
-      } else if (e.touches.length === 1) {
-        // If one finger is lifted during pinch zoom, switch to drag with remaining finger
-        const touch = e.touches[0];
-        startX = touch.clientX;
-        startY = touch.clientY;
-        startTranslateX = currentTranslateX;
-        startTranslateY = currentTranslateY;
-        isDragging = true;
-        touchStartDistance = 0;
-      }
-    }
-
-    function applyMomentum() {
-      const deceleration = 0.95;
-      const threshold = 0.1;
-      
-      // Apply friction
-      velocityX *= deceleration;
-      velocityY *= deceleration;
-      
-      // Stop if velocity is below threshold
-      if (Math.abs(velocityX) < threshold && Math.abs(velocityY) < threshold) {
-        velocityX = 0;
-        velocityY = 0;
-        return;
-      }
-      
-      // Update position
-      currentTranslateX += velocityX * 16; // Assuming ~60fps
-      currentTranslateY += velocityY * 16;
-      
-      // Apply bounds checking to prevent dragging too far
-      const img = document.getElementById('lightbox-img');
-      const container = document.querySelector('.lightbox-img-container');
-      const imgRect = img.getBoundingClientRect();
-      const containerRect = container.getBoundingClientRect();
-      
-      const maxTranslateX = Math.max(0, (imgRect.width * currentScale - containerRect.width) / 2);
-      const maxTranslateY = Math.max(0, (imgRect.height * currentScale - containerRect.height) / 2);
-      
-      currentTranslateX = Math.max(-maxTranslateX, Math.min(maxTranslateX, currentTranslateX));
-      currentTranslateY = Math.max(-maxTranslateY, Math.min(maxTranslateY, currentTranslateY));
-      
-      applyTransform();
-      
-      // Continue animation
-      animationFrameId = requestAnimationFrame(applyMomentum);
     }
 
     // Gallery data
@@ -1277,73 +1128,98 @@
         } else if (e.key === 'ArrowRight') {
           navigateLightbox(1);
         } else if (e.key === '+' || e.key === '=') {
-          zoomIn();
+          e.preventDefault();
+          zoomImageIn();
         } else if (e.key === '-' || e.key === '_') {
-          zoomOut();
+          e.preventDefault();
+          zoomImageOut();
         } else if (e.key === '0') {
           resetZoom();
         }
       }
     });
 
-    // Touch events for lightbox
-    const lightboxContent = document.querySelector('.lightbox-content');
-    lightboxContent.addEventListener('touchstart', handleTouchStart, { passive: false });
-    lightboxContent.addEventListener('touchmove', handleTouchMove, { passive: false });
-    lightboxContent.addEventListener('touchend', handleTouchEnd, { passive: true });
-
-    // Mouse events for desktop drag
-    lightboxContent.addEventListener('mousedown', function(e) {
-      if (currentScale > 1) {
-        e.preventDefault();
-        startX = e.clientX;
-        startY = e.clientY;
-        startTranslateX = currentTranslateX;
-        startTranslateY = currentTranslateY;
-        isDragging = true;
-        
-        document.addEventListener('mousemove', handleMouseMove);
-        document.addEventListener('mouseup', handleMouseUp);
-      }
-    });
-
-    function handleMouseMove(e) {
-      if (isDragging) {
-        e.preventDefault();
-        const deltaX = e.clientX - startX;
-        const deltaY = e.clientY - startY;
-        
-        currentTranslateX = startTranslateX + deltaX;
-        currentTranslateY = startTranslateY + deltaY;
-        applyTransform();
-      }
-    }
-
-    function handleMouseUp() {
-      isDragging = false;
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    }
-
     // Mouse wheel zoom
-    lightboxContent.addEventListener('wheel', function(e) {
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-        if (e.deltaY < 0) {
-          zoomIn();
-        } else {
-          zoomOut();
-        }
+    document.getElementById('lightbox-img').addEventListener('wheel', function(e) {
+      e.preventDefault();
+      if (e.deltaY < 0) {
+        zoomImageIn();
+      } else {
+        zoomImageOut();
       }
     }, { passive: false });
 
-    // Double click/tap to zoom
-    lightboxContent.addEventListener('dblclick', function(e) {
-      if (currentScale === 1) {
-        zoomIn();
-      } else {
-        resetZoom();
+    // Touch events for lightbox navigation and zoom
+    const lightboxImg = document.getElementById('lightbox-img');
+    
+    // Single touch for dragging
+    lightboxImg.addEventListener('touchstart', function(e) {
+      if (e.touches.length === 1) {
+        isDragging = true;
+        startX = e.touches[0].clientX - translateX;
+        startY = e.touches[0].clientY - translateY;
+      } else if (e.touches.length === 2) {
+        // Calculate distance between two touches
+        lastTouchDistance = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
       }
+    }, { passive: false });
+
+    lightboxImg.addEventListener('touchmove', function(e) {
+      if (e.touches.length === 1 && isDragging && currentScale > 1) {
+        e.preventDefault();
+        translateX = e.touches[0].clientX - startX;
+        translateY = e.touches[0].clientY - startY;
+        lightboxImg.style.transform = `scale(${currentScale}) translate(${translateX}px, ${translateY}px)`;
+        updateResetButton();
+      } else if (e.touches.length === 2) {
+        e.preventDefault();
+        // Calculate new distance between touches
+        const touchDistance = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+        
+        // Calculate zoom factor
+        if (lastTouchDistance > 0) {
+          const scaleFactor = touchDistance / lastTouchDistance;
+          currentScale = Math.min(Math.max(currentScale * scaleFactor, 1), 4);
+          lightboxImg.style.transform = `scale(${currentScale}) translate(${translateX}px, ${translateY}px)`;
+          updateResetButton();
+        }
+        
+        lastTouchDistance = touchDistance;
+      }
+    }, { passive: false });
+
+    lightboxImg.addEventListener('touchend', function() {
+      isDragging = false;
+      lastTouchDistance = 0;
+    });
+
+    // Mouse drag for desktop
+    lightboxImg.addEventListener('mousedown', function(e) {
+      if (currentScale > 1) {
+        isDragging = true;
+        startX = e.clientX - translateX;
+        startY = e.clientY - translateY;
+        e.preventDefault();
+      }
+    });
+
+    document.addEventListener('mousemove', function(e) {
+      if (isDragging) {
+        translateX = e.clientX - startX;
+        translateY = e.clientY - startY;
+        lightboxImg.style.transform = `scale(${currentScale}) translate(${translateX}px, ${translateY}px)`;
+        updateResetButton();
+      }
+    });
+
+    document.addEventListener('mouseup', function() {
+      isDragging = false;
     });
 
     // Optimize video loading and autoplay
